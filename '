@@ -1,0 +1,645 @@
+import sys
+import os
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QImage, QPalette, QColor
+from PyQt6.QtWidgets import QPushButton
+from PyQt6.QtWidgets import (QApplication, QMainWindow,QLabel, QWidget, QSlider, QToolButton, QToolBar, QDockWidget, QMessageBox, QFileDialog, QGridLayout,
+                             QScrollArea, QSizePolicy, QRubberBand)
+from PyQt6.QtCore import Qt, QSize, QRect
+from PyQt6.QtGui import QIcon, QPixmap, QImage, QTransform, QPalette, qRgb, QColor, QAction
+
+import matplotlib.pyplot as plt
+from skimage import data, filters
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+import matplotlib.pyplot as plt
+
+import numpy as np
+import cv2
+
+from editor import MyEditor
+
+icon_path= 'icons'
+class ImageW(QLabel):
+    def __init__(self) -> None:
+        super(ImageW, self).__init__()
+        self.brightness = 0
+        self.contrast = 0
+        editor=MyEditor()
+        self.image= editor.getBuffer()
+        height, width = self.image.shape[0:2]
+        print(width)
+        print(height)
+        print('')
+        try:
+            channel=self.image.shape[2]
+        except Exception as e:
+            print(e)
+        bytesPerLine = 3 * width
+        qImg = QImage(self.image.data, width, height,
+                      bytesPerLine, QImage.Format.Format_BGR888)
+        im = QPixmap(qImg)
+
+        self.setPixmap(im)
+        self.setScaledContents(True)
+
+    def setState(self):
+        self.image=MyEditor().getBuffer()
+        height, width = self.image.shape[0:2]
+        if len(self.image.shape)==3:
+            bytesPerLine = 3 * width
+            channel=self.image.shape[2]
+            qImg = QImage(self.image.data, width, height,
+                      bytesPerLine, QImage.Format.Format_BGR888)
+        else:
+            bytesPerLine = width
+            qImg = QImage(self.image.data, width, height,
+                      bytesPerLine, QImage.Format.Format_Grayscale8)
+        im = QPixmap(qImg)
+        self.adjustSize()
+
+        self.setPixmap(im)
+        self.adjustSize()
+
+
+
+
+
+
+class MainWindow(QMainWindow):
+
+    def __init__(self):
+        super(MainWindow, self).__init__()
+
+        layout = QVBoxLayout()
+        self.figure = plt.figure()
+
+        self.imw = ImageW()
+        self.canvas = FigureCanvas(self.figure)
+        self._initBrightnessSlider()
+        self._initContrastSlider()
+
+        layout.addWidget(self.imw)
+        layout.addWidget(self.brightnessSlider)
+        layout.addWidget(self.contrastSlider)
+        layout.addWidget(self.canvas)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.plot()
+        # Set the central widget of the Window. Widget will expand
+        # to take up all the space in the window by default.
+        self.setCentralWidget(widget)
+
+
+    # Initiialising the widgets
+    def _initBrightnessSlider(self):
+        self.brightnessSlider = QSlider()
+        self.brightnessSlider.setMinimum(-255)
+        self.brightnessSlider.setMaximum(255)
+        self.brightnessSlider.setSingleStep(1)
+        self.brightnessSlider.sliderMoved.connect(self._changeBrightness)
+        self.brightnessSlider.sliderReleased.connect(MyEditor().save)
+
+    def _initContrastSlider(self):
+        self.contrastSlider = QSlider()
+        self.contrastSlider.setMinimum(-100)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setSingleStep(1)
+        self.contrastSlider.sliderMoved.connect(self._changeContrast)
+        self.contrastSlider.sliderReleased.connect(MyEditor().save)
+
+    def _changeContrast(self, value):
+        self.imw.adjustContrast(value)
+
+    def _changeBrightness(self, value):
+        self.imw.adjustBrightness(value)
+
+
+class PhotoEditorGUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.initializeUI()
+
+        self.image = QImage()
+
+    def setState(self):
+        self.image_label.setState()
+        self.plot()
+        self.zoomOnImage(1)
+
+    def initializeUI(self):
+        self.setMinimumSize(300, 200)
+        self.setWindowTitle("Photo Editor")
+        self.showMaximized()
+
+        self.zoom_factor = 1
+        self.figure = plt.figure()
+        self.canvas = FigureCanvas(self.figure)
+
+        self.createMainLabel()
+        #self.createEditingBar()
+        self.createMenu()
+        self.createToolBar()
+
+        self.show()
+    def plot(self):
+
+        # random datah
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        if(len(MyEditor().getBuffer().shape)==3):
+            h_b, bin_b = np.histogram(
+                MyEditor().getBuffer()[:,:,0].flatten(),
+                256,
+                [0, 256])
+            h_g, bin_b = np.histogram(
+                MyEditor().getBuffer()[:,:,1].flatten(),
+                256,
+                [0, 256])
+            h_r, bin_b = np.histogram(
+                MyEditor().getBuffer()[:,:,2].flatten(),
+                256,
+                [0, 256])
+            ax.plot(h_b)
+            ax.plot(h_g)
+            ax.plot(h_r)
+        else:
+            h, bin = np.histogram(
+                MyEditor().getBuffer()[:,:].flatten(),
+                256,
+                [0, 256])
+            ax.plot(h)
+
+        # instead of ax.hold(false)
+
+        # create an axis
+
+        # discards the old graph
+        # ax.hold(false) # deprecated, see above
+
+        # plot data
+
+        # refresh canvas
+        self.canvas.draw()
+
+    def openBrighHistogram(self):
+        try:
+            self.removeDockWidget(self.editing_bar)
+        except Exception as e:
+            print("exception")
+        # TODO: Add a tab widget for the different editing tools
+        self.editing_bar = QDockWidget("Histogram")
+        self.editing_bar.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea & Qt.DockWidgetArea.RightDockWidgetArea)
+        self.editing_bar.setMinimumWidth(120)
+        self.editing_bar.setMinimumHeight(100)
+
+        brightness_label = QLabel("Brightness")
+        self.brightness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.brightness_slider.setRange(-255, 255)
+        self.brightness_slider.setTickInterval(35)
+        self.brightness_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.brightness_slider.valueChanged.connect(
+            self.changeBright)
+
+        contrast_label = QLabel("Contrast")
+        self.contrast_slider = QSlider(Qt.Orientation.Horizontal)
+        self.contrast_slider.setRange(-100, 100)
+        self.contrast_slider.setTickInterval(35)
+        self.contrast_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.contrast_slider.valueChanged.connect(
+            self.changeContrast)
+
+        # Set layout for dock widget
+        editing_grid = QGridLayout()
+        editing_grid.addWidget(brightness_label, 1, 0)
+        editing_grid.addWidget(self.brightness_slider, 4, 0, 1, 0)
+        editing_grid.addWidget(contrast_label, 5, 0)
+        editing_grid.addWidget(self.contrast_slider, 6, 0, 1, 0)
+        editing_grid.addWidget(self.canvas,7,0,1,0)
+        editing_grid.setRowStretch(7, 10)
+
+        container = QWidget()
+        container.setLayout(editing_grid)
+
+        self.editing_bar.setWidget(container)
+
+        self.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self.editing_bar)
+
+
+    def openBrighContrTools(self):
+        try:
+            self.removeDockWidget(self.editing_bar)
+        except Exception as e:
+            print("exception")
+        # TODO: Add a tab widget for the different editing tools
+        self.editing_bar = QDockWidget("Tools")
+        self.editing_bar.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.editing_bar.setMinimumWidth(90)
+
+        brightness_label = QLabel("Brightness")
+        self.brightness_slider = QSlider(Qt.Orientation.Horizontal)
+        self.brightness_slider.setRange(-255, 255)
+        self.brightness_slider.setTickInterval(35)
+        self.brightness_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.brightness_slider.valueChanged.connect(
+            self.changeBright)
+
+        contrast_label = QLabel("Contrast")
+        self.contrast_slider = QSlider(Qt.Orientation.Horizontal)
+        self.contrast_slider.setRange(-100, 100)
+        self.contrast_slider.setTickInterval(35)
+        self.contrast_slider.setTickPosition(QSlider.TickPosition.TicksAbove)
+        self.contrast_slider.valueChanged.connect(
+            self.changeContrast)
+
+        # Set layout for dock widget
+        editing_grid = QGridLayout()
+        editing_grid.addWidget(brightness_label, 1, 0)
+        editing_grid.addWidget(self.brightness_slider, 4, 0, 1, 0)
+        editing_grid.addWidget(contrast_label, 5, 0)
+        editing_grid.addWidget(self.contrast_slider, 6, 0, 1, 0)
+        editing_grid.addWidget(self.canvas,7,0,1,0)
+        editing_grid.setRowStretch(7, 10)
+
+        container = QWidget()
+        container.setLayout(editing_grid)
+
+        self.editing_bar.setWidget(container)
+
+        self.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self.editing_bar)
+
+
+
+
+
+    def openFilterTools(self):
+        try:
+            print
+            self.removeDockWidget(self.editing_bar)
+        except Exception as e:
+            print("exception")
+        # TODO: Add a tab widget for the different editing tools
+        self.editing_bar = QDockWidget("Apply filters")
+        self.editing_bar.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.editing_bar.setMinimumWidth(90)
+
+        run_sobel = QPushButton("Sobel")
+        run_sobel.clicked.connect(self.applySobel)
+
+        run_Laplacian = QPushButton("Laplacian")
+        run_Laplacian.clicked.connect(self.applyLaplacian)
+
+        run_LoG = QPushButton("Laplacian of gaussian")
+        run_LoG.clicked.connect(self.applyLoG)
+
+        run_filter2 = QPushButton("filter2")
+
+        # Set layout for dock widget
+        editing_grid = QGridLayout()
+        editing_grid.addWidget(run_sobel, 1, 0)
+        editing_grid.addWidget(run_Laplacian, 3, 0)
+        editing_grid.addWidget(run_LoG, 4, 0)
+        editing_grid.setRowStretch(7, 10)
+        container = QWidget()
+        container.setLayout(editing_grid)
+
+        self.editing_bar.setWidget(container)
+
+        self.addDockWidget(
+            Qt.DockWidgetArea.LeftDockWidgetArea, self.editing_bar)
+
+
+
+
+
+
+#        self.tools_menu_act = self.editing_bar.toggleViewAction()
+    def undo(self):
+        MyEditor().undo()
+        self.setState()
+
+    def redo(self):
+        MyEditor().redo()
+        self.setState()
+
+    def save(self):
+        MyEditor().save()
+        self.setState()
+
+    def equalize(self):
+        MyEditor().contrastEq()
+        MyEditor().save()
+        self.plot()
+        self.setState()
+
+    def rotate(self):
+        MyEditor().rotate()
+        MyEditor().save()
+        self.setState()
+        self.image_label.resize(
+            1 * self.image_label.pixmap().size())
+
+    def flipHorizontal(self):
+        MyEditor().flipHorizontal()
+        MyEditor().save()
+        self.setState()
+
+    def flipVertical(self):
+        MyEditor().flipVerical()
+        MyEditor().save()
+        self.setState()
+
+    def applySobel(self):
+        MyEditor().applyFilter("Sobel")
+        MyEditor().save()
+        self.setState()
+
+    def applyLaplacian(self):
+        MyEditor().applyFilter("Laplacian")
+        MyEditor().save()
+        self.setState()
+
+    def applyLoG(self):
+        MyEditor().applyFilter("LoG")
+        MyEditor().save()
+        self.setState()
+
+
+    def rgb2gray(self):
+        MyEditor().rgb2gray()
+        MyEditor().save()
+        self.setState()
+
+    def toBinary(self):
+        MyEditor().toBinary()
+        MyEditor().save()
+        self.setState()
+
+    def createMenu(self):
+        """Set up the menubar."""
+        # Actions for Photo Editor menu
+        about_act = QAction('About', self)
+  #      about_act.triggered.connect(self.aboutDialog)
+
+        self.exit_act = QAction(
+            QIcon(os.path.join(icon_path, "exit.png")), 'Quit Photo Editor', self)
+        self.exit_act.setShortcut('Ctrl+Q')
+   #     self.exit_act.triggered.connect(self.close)
+
+        # Actions for File menu
+        self.new_act = QAction(
+            QIcon(os.path.join(icon_path, "new.png")), 'New...')
+
+        self.open_act = QAction(
+            QIcon(os.path.join(icon_path, "brightness.png")), 'Open...', self)
+        self.open_act.setShortcut('Ctrl+O')
+        self.open_act.triggered.connect(self.openBrighContrTools)
+
+        self.rgb2gray_act = QAction(
+            QIcon(os.path.join(icon_path, "grayscale.png")), 'Open...', self)
+        self.rgb2gray_act.setShortcut('Ctrl+O')
+        self.rgb2gray_act.triggered.connect(self.rgb2gray)
+
+        self.open_filters = QAction(
+            QIcon(os.path.join(icon_path, "filter.png")), 'Open...', self)
+        self.open_filters.setShortcut('Ctrl+O')
+        self.open_filters.triggered.connect(self.openFilterTools)
+
+        self.undo_act = QAction(
+            QIcon(os.path.join(icon_path, "undo.png")), "Print...", self)
+        self.undo_act.setShortcut('Ctrl+U')
+        self.undo_act.triggered.connect(self.undo)
+
+        self.redo_act = QAction(
+            QIcon(os.path.join(icon_path, "redo.png")), "Print...", self)
+        self.redo_act.setShortcut('Ctrl+R')
+        self.redo_act.triggered.connect(self.redo)
+
+        self.save_act = QAction(
+            QIcon(os.path.join(icon_path, "save.png")), "Print...", self)
+        self.save_act.setShortcut('Ctrl+I')
+        self.save_act.triggered.connect(self.save)
+
+        self.equalize_act = QAction(
+            QIcon(os.path.join(icon_path, "flatten.png")), "Print...", self)
+        self.equalize_act.setShortcut('Ctrl+I')
+        self.equalize_act.triggered.connect(self.equalize)
+
+
+        self.rotate_act = QAction(
+            QIcon(os.path.join(icon_path, "rotate90_cw.png")), 'Rotate 90º CW', self)
+        self.rotate_act.triggered.connect(self.rotate)
+
+        self.flip_horizontal = QAction(
+            QIcon(os.path.join(icon_path, "flip_horizontal.png")), 'Flip Horizontal', self)
+        self.flip_horizontal.triggered.connect(self.flipHorizontal)
+
+        self.flip_vertical = QAction(
+            QIcon(os.path.join(icon_path, "flip_vertical.png")), 'Flip Vertical', self)
+        self.flip_vertical.triggered.connect(
+             self.flipVertical)
+
+        self.bi_act = QAction(
+            QIcon(os.path.join(icon_path, "binary.png")), "Print...", self)
+        self.bi_act.setShortcut('Ctrl+R')
+        self.bi_act.triggered.connect(self.toBinary)
+
+############################################################################
+        # Actions for Edit menu
+        self.revert_act = QAction("Revert to Original", self)
+#        self.revert_act.triggered.connect(self.image_label.revertToOriginal)
+        self.revert_act.setEnabled(False)
+
+        # Actions for Tools menu
+        self.crop_act = QAction(
+            QIcon(os.path.join(icon_path, "crop.png")), "Crop", self)
+        self.crop_act.setShortcut('Shift+X')
+#        self.crop_act.triggered.connect(self.image_label.cropImage)
+
+        self.resize_act = QAction(
+            QIcon(os.path.join(icon_path, "resize.png")), "Resize", self)
+        self.resize_act.setShortcut('Shift+Z')
+ #       self.resize_act.triggered.connect(self.image_label.resizeImage)
+        self.zoom_in_act = QAction(
+            QIcon(os.path.join(icon_path, "zoom_in.png")), 'Zoom In', self)
+        self.zoom_in_act.setShortcut('Ctrl++')
+        self.zoom_in_act.triggered.connect(lambda: self.zoomOnImage(1.25))
+        self.zoom_in_act.setEnabled(True)
+
+        self.zoom_out_act = QAction(
+            QIcon(os.path.join(icon_path, "zoom_out.png")), 'Zoom Out', self)
+        self.zoom_out_act.setShortcut('Ctrl+-')
+        self.zoom_out_act.triggered.connect(lambda: self.zoomOnImage(0.8))
+        self.zoom_out_act.setEnabled(True)
+
+        self.normal_size_Act = QAction("Normal Size", self)
+        self.normal_size_Act.setShortcut('Ctrl+=')
+   #     self.normal_size_Act.triggered.connect(self.normalSize)
+        self.normal_size_Act.setEnabled(False)
+
+        # Actions for Views menu
+        #self.tools_menu_act = QAction(QIcon(os.path.join(icon_path, "edit.png")),'Tools View...', self, checkable=True)
+
+        # Create menubar
+        menu_bar = self.menuBar()
+        menu_bar.setNativeMenuBar(False)
+
+        # Create Photo Editor menu and add actions
+        main_menu = menu_bar.addMenu('Photo Editor')
+ #       main_menu.addAction(about_act)
+        main_menu.addSeparator()
+ #       main_menu.addAction(self.exit_act)
+
+        # Create file menu and add actions
+        file_menu = menu_bar.addMenu('File')
+   #     file_menu.addAction(self.open_act)
+  #      file_menu.addAction(self.save_act)
+        file_menu.addSeparator()
+ #       file_menu.addAction(self.print_act)
+
+        edit_menu = menu_bar.addMenu('Edit')
+#        edit_menu.addAction(self.revert_act)
+
+        tool_menu = menu_bar.addMenu('Tools')
+#        tool_menu.addAction(self.crop_act)
+#        tool_menu.addAction(self.resize_act)
+#        tool_menu.addSeparator()
+#        tool_menu.addAction(self.rotate_act)
+#        tool_menu.addAction(self.rotate90_ccw_act)
+        tool_menu.addAction(self.flip_horizontal)
+        tool_menu.addAction(self.flip_vertical)
+#        tool_menu.addSeparator()
+        tool_menu.addAction(self.zoom_in_act)
+        tool_menu.addAction(self.zoom_out_act)
+#        tool_menu.addAction(self.normal_size_Act)
+        tool_menu.addAction(self.bi_act)
+
+        views_menu = menu_bar.addMenu('Views')
+ #       views_menu.addAction(self.tools_menu_act)
+
+    def createToolBar(self):
+#        """Set up the toolbar."""
+        tool_bar = QToolBar("Main Toolbar")
+        tool_bar.setIconSize(QSize(26, 26))
+        self.addToolBar(tool_bar)
+
+        # Add actions to the toolbar
+        tool_bar.addAction(self.open_act)
+        tool_bar.addAction(self.open_filters)
+        tool_bar.addAction(self.equalize_act)
+        tool_bar.addAction(self.rgb2gray_act)
+        tool_bar.addAction(self.rotate_act)
+#        tool_bar.addAction(self.rotate90_cw_act)
+        tool_bar.addAction(self.flip_horizontal)
+        tool_bar.addAction(self.flip_vertical)
+        tool_bar.addSeparator()
+        tool_bar.addAction(self.undo_act)
+        tool_bar.addAction(self.redo_act)
+        tool_bar.addSeparator()
+        tool_bar.addAction(self.save_act)
+        tool_bar.addAction(self.bi_act)
+#        tool_bar.addAction(self.save_act)
+#        tool_bar.addAction(self.print_act)
+#        tool_bar.addAction(self.exit_act)
+#        tool_bar.addSeparator()
+#        tool_bar.addAction(self.crop_act)
+#        tool_bar.addAction(self.resize_act)
+#        tool_bar.addSeparator()
+#        tool_bar.addSeparator()
+        tool_bar.addAction(self.zoom_in_act)
+        tool_bar.addAction(self.zoom_out_act)
+
+    def createMainLabel(self):
+        """Create an instance of the imageLabel class and set it 
+           as the main window's central widget."""
+        self.image_label = ImageW()
+        self.image_label.resize(self.image_label.pixmap().size())
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setBackgroundRole(QPalette.ColorRole.Dark)
+        self.scroll_area.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.scroll_area.setWidgetResizable(False)
+        #scroll_area.setMinimumSize(800, 800)
+
+        self.scroll_area.setWidget(self.image_label)
+        # self.scroll_area.setVisible(False)
+
+        self.setCentralWidget(self.scroll_area)
+
+        #self.resize(QApplication.primaryScreen().availableSize() * 3 / 5)
+
+    def updateActions(self):
+        """Update the values of menu and toolbar items when an image 
+        is loaded."""
+        self.save_act.setEnabled(True)
+        self.revert_act.setEnabled(True)
+        self.zoom_in_act.setEnabled(True)
+        self.zoom_out_act.setEnabled(True)
+        self.normal_size_Act.setEnabled(True)
+        self.bi_act.setEnabled(True)
+
+    def zoomOnImage(self, zoom_value):
+        """Zoom in and zoom out."""
+        self.zoom_factor *= zoom_value
+        self.image_label.resize(
+            self.zoom_factor * self.image_label.pixmap().size())
+
+        self.adjustScrollBar(
+            self.scroll_area.horizontalScrollBar(), zoom_value)
+        self.adjustScrollBar(self.scroll_area.verticalScrollBar(), zoom_value)
+
+        self.zoom_in_act.setEnabled(self.zoom_factor < 4.0)
+        self.zoom_out_act.setEnabled(self.zoom_factor > 0.333)
+
+    def normalSize(self):
+        """View image with its normal dimensions."""
+        self.image_label.adjustSize()
+        self.zoom_factor = 1.0
+
+    def adjustScrollBar(self, scroll_bar, value):
+        """Adjust the scrollbar when zooming in or out."""
+        scroll_bar.setValue(int(value * scroll_bar.value()) +
+                            ((value - 1) * scroll_bar.pageStep()/2))
+
+    def aboutDialog(self):
+        QMessageBox.about(self, "About Photo Editor",
+                          "Photo Editor\nVersion 0.2\n\nCreated by Joshua Willman")
+
+    def keyPressEvent(self, event):
+        """Handle key press events."""
+        if event.key() == Qt.Key_Escape:
+            self.close()
+        if event.key() == Qt.Key_F1:  # fn + F1 on Mac
+            if self.isMaximized():
+                self.showNormal()
+            else:
+                self.showMaximized()
+
+    def closeEvent(self, event):
+        pass
+
+    def changeBright(self,brightness):
+        MyEditor().changeBright(brightness)
+        self.setState()
+
+    def changeContrast(self,contrast):
+        MyEditor().changeContr(contrast)
+        self.setState()
+
+
+
+if __name__ == '__main__':
+    editor=MyEditor()
+    editor.openImage("../../tp_images/rose.jpeg")
+    app = QApplication(sys.argv)
+    mainWindow = PhotoEditorGUI()
+    mainWindow.show()
+    app.exec()
