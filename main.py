@@ -95,21 +95,21 @@ class PhotoEditorGUI(QMainWindow):
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         if(len(MyEditor().getBuffer().shape)==3):
-            h_b, bin_b = np.histogram(
+            h_b = np.histogram(
                 MyEditor().getBuffer()[:,:,0].flatten(),
                 256,
-                [0, 256])
-            h_g, bin_b = np.histogram(
+                [0, 256])[0]
+            h_g = np.histogram(
                 MyEditor().getBuffer()[:,:,1].flatten(),
                 256,
-                [0, 256])
-            h_r, bin_b = np.histogram(
+                [0, 256])[0]
+            h_r= np.histogram(
                 MyEditor().getBuffer()[:,:,2].flatten(),
                 256,
-                [0, 256])
-            ax.plot(h_b)
-            ax.plot(h_g)
-            ax.plot(h_r)
+                [0, 256])[0]
+            ax.plot(h_b,'b')
+            ax.plot(h_g,'g')
+            ax.plot(h_r,'r')
         else:
             h, bin = np.histogram(
                 MyEditor().getBuffer()[:,:].flatten(),
@@ -617,7 +617,7 @@ class PhotoEditorGUI(QMainWindow):
 
 
 if __name__ == '__main__':
-    MyEditor().openImage("./cameraman.tif")
+    MyEditor().openImage("./images/default.png")
     app = QApplication(sys.argv)
     mainWindow = PhotoEditorGUI()
     mainWindow.show()
