@@ -262,47 +262,20 @@ class MyEditor(metaclass=SingletonMeta):
     def flipVerical(self):
         self.buff=cv2.flip(self.buff,0)
 
+    def face_recongnize(self):
+        face_cascade = cv2.CascadeClassifier('models/haarcascade_frontalface_default.xml')
+        img = self.buff
+        try:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        except Exception as e:
+            pass
+        faces = face_cascade.detectMultiScale(img, 1.1, 4)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(self.buff, (x, y), (x+w, y+h), (255, 0, 0), 2)
+
+
 
 
 if __name__ == "__main__":
     editor=MyEditor()
     editor.openImage("../")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
