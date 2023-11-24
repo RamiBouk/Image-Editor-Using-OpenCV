@@ -348,6 +348,11 @@ class PhotoEditorGUI(QMainWindow):
         MyEditor().save()
         self.setState()
 
+    def faceRecognize(self):
+        MyEditor().face_recongnize()
+        MyEditor().save()
+        self.setState()
+
     def applySobel(self):
         MyEditor().applyFilter("Sobel")
         MyEditor().save()
@@ -396,7 +401,10 @@ class PhotoEditorGUI(QMainWindow):
         self.setState()
 
     def toBinary(self):
-        MyEditor().toBinary([self.value_seuil.text()])
+        try:
+            MyEditor().toBinary([self.value_seuil.text()])
+        except:
+            MyEditor().toBinary()
         MyEditor().save()
         self.setState()
 
@@ -467,6 +475,11 @@ class PhotoEditorGUI(QMainWindow):
         self.flip_vertical.triggered.connect(
              self.flipVertical)
 
+        self.face_recongnize = QAction(
+                QIcon(os.path.join(icon_path, "rec.jpg")), 'Face Recognize', self)
+        self.face_recongnize.triggered.connect(
+             self.faceRecognize)
+
         self.bi_act = QAction(
             QIcon(os.path.join(icon_path, "binary.png")), "To BW", self)
         self.bi_act.triggered.connect(self.toBinary)
@@ -515,6 +528,7 @@ class PhotoEditorGUI(QMainWindow):
         tool_bar.addAction(self.open_bright)
         tool_bar.addAction(self.equalize_act)
         tool_bar.addAction(self.rgb2gray_act)
+        tool_bar.addAction(self.face_recongnize)
         tool_bar.addSeparator()
         tool_bar.addAction(self.bi_act)
         tool_bar.addAction(self.rotate_act)

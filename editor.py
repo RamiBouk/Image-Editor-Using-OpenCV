@@ -244,8 +244,7 @@ class MyEditor(metaclass=SingletonMeta):
     def toBinary(self,param=[]):
         seuil=125
         if len(param)==1 :
-           seuil=int(param[0])
-           print("seuil:",seuil)
+            seuil=int(param[0])
         self.rgb2gray()
         (_, self.buff) = cv2.threshold(self.buff, seuil, 255, cv2.THRESH_BINARY )
 
